@@ -1,0 +1,247 @@
+os.loadAPI("Logger");
+os.loadAPI("SimpleGPS");
+SimpleGPS.setFuelSlot(16);
+Logger.start("effcube2.log",Logger.LogLevel.Info);
+
+-- Variables
+sleep(2)
+local tArgs = {...}
+local siz = {1,1,1}
+local block_fall_time = 0.35
+
+siz[1] = tonumber(tArgs[1])
+siz[2] = tonumber(tArgs[2])
+siz[3] = tonumber(tArgs[3])
+
+siz[1] = siz[1] or 1
+siz[2] = siz[2] or siz[1]
+siz[3] = siz[3] or 1
+if siz[3]<2 then
+ siz[3]=2
+end
+
+-- Functions
+function refuel(amount)
+  if turtle.getFuelLevel()<5 then
+    turtle.select(16)
+    turtle.refuel(amount)
+    turtle.select(1)
+  end
+end
+
+-- digging functions
+function digcolumn(height,upiftrue,doublecolumn)
+    for jj=1,height do
+        if (doublecolumn) then
+            clearfrontal();
+        end
+        if (upiftrue) then
+            SimpleGPS.digz(1)
+        else
+            SimpleGPS.digz(-1)
+        end
+    end
+    if (doublecolumn) then
+        clearfrontal();
+    end
+end
+function digcrosscolumn(height, upiftrue)
+    for jj=1,height do
+        digallaround()
+        if (upiftrue) then
+            SimpleGPS.digz(1)
+        else
+            SimpleGPS.digz(-1)
+        end
+    end
+    digallaround()
+end
+function digallaround()
+    digforwardifvalid()
+    for ii=1,3 do
+        SimpleGPS.turnleft(1)
+        digforwardifvalid()
+    end
+end
+function digforwardifvalid()
+    local ori = SimpleGPS.getOrientation();
+    if (ori==SimpleGPS.Orientation.forward) then
+        if (SimpleGPS.getY()<siz[2]) then
+            clearfrontal()
+        end
+    elseif (ori==SimpleGPS.Orientation.right) then
+        if (SimpleGPS.getX()<siz[1]) then
+            clearfrontal()
+        end
+    elseif (ori==SimpleGPS.Orientation.backward) then
+        if (SimpleGPS.getY()>1) then
+            clearfrontal()
+        end
+    elseif (ori==SimpleGPS.Orientation.left) then
+        if (SimpleGPS.getX()>1) then
+            clearfrontal()
+        end
+    end
+end
+function clearfrontal()
+    while(turtle.detect()) do
+        turtle.dig()
+        sleep(block_fall_time)
+    end
+end
+
+-- main loop
+function main()
+    local zdirection = true -- true (up), false (down)
+    local nearend = false -- off the board going up _and_ going down --> finished
+    local offboard;
+    local wx=SimpleGPS.getX();
+    local wy=SimpleGPS.getY();
+    -- start at leftbottom (x=1,y=1), going down (immediately followed by going up obviously)
+    -- mode: 0 (start), 1 (going up), 2 (going down), 3 (border), 4 (come home), 5 (end)
+    local mode=0;
+    local newx=wx;
+    local newy=wy;
+    --mode=3;zdirection = true;
+    Logger.loginfo("Digging " .. siz[1] .. "x" .. siz[2] .. "x" .. siz[3])
+    while(1) do
+        if (mode==0) then
+            mode = 2;
+        elseif mode==1 then
+            newx = wx - 1;
+            newy = wy + 2;
+            if ((newx < 1) or (newy>siz[2])) then
+                mode = 2;
+                newx = wx;
+                newy = wy + 5;
+                while(newy>siz[2] or newx<1) do
+                    newx = newx + 1;
+                    newy = newy - 2;
+                end
+                offboard = (newx>siz[1]);
+                if (nearend and offboard) then
+                    mode = 3; -- main tesselation finished
+                end
+                nearend = offboard;
+            else
+                nearend = false;
+            end
+        elseif (mode==2) then
+            newx = wx + 1;
+            newy = wy - 2;
+            if ((newy<1) or (newx>siz[1])) then
+                mode = 1;
+                newx = wx + 3;
+                newy = wy - 1;
+                while((newx > siz[1]) or (newy<1)) do
+                    newx = newx - 1;
+                    newy = newy + 2;
+                end
+                offboard = (newy>siz[2]);
+                if (offboard and nearend) then
+                    mode = 3; -- main tesselation finished
+                end
+                nearend = offboard;
+            else
+                nearend = false;
+            end
+        else
+            break;
+        end
+        wx = newx;
+        wy = newy;
+        if (not nearend) then
+            SimpleGPS.digto(wx,wy)
+            digcrosscolumn(siz[3]-1,zdirection)
+            zdirection = not zdirection
+        end
+    end
+    
+    
+    -- there are still dents along the border, find them:
+    local ry1,ryend,tx1,txend,ly1,lyend,bx1,bxend;
+    -- right side
+    if (siz[1]%2==0) then
+        ry1 = (siz[1]/2)%5 + 1;
+    else
+        ry1 = ((siz[1]-5)/2)%5 + 1;
+    end
+    ryend = ry1 + 5*math.floor((siz[2]-ry1)/5);
+    
+    -- top side
+    if (siz[2]%2==0) then
+        tx1 = (-siz[2]/2)%5 + 1;
+    else
+        tx1 = ((5-siz[2])/2)%5 + 1;
+    end
+    txend = tx1 + 5*math.floor((siz[1]-tx1)/5);
+    
+    -- left side
+    ly1 = 3;
+    lyend = 3 + 5*math.floor((siz[2]-3)/5);
+    -- bottom side
+    bx1 = 4;
+    bxend = 4 + 5*math.floor((siz[1]-4)/5);
+    
+    -- and destroy them
+    -- counterclockwise, starting at top right
+    -- check if two dents meet in the corners
+    
+    -- top side
+    if (ryend==siz[2]-1) then
+        txend = txend - 5; -- we'll dig it together with (siz[1],ryend)
+    end
+    while(txend>=tx1) do
+        SimpleGPS.digto(txend,siz[2],z);
+        SimpleGPS.face(SimpleGPS.Orientation.left);
+        if (txend==2) then -- check for meeting dents in corner
+            digcolumn(siz[3]-1,zdirection,true);
+            lyend=lyend-5;
+        else
+            digcolumn(siz[3]-1,zdirection,false);
+        end
+        zdirection = (not zdirection);
+        txend=txend-5;
+    end
+    
+    -- left side
+    while(lyend>=ly1) do
+        SimpleGPS.digto(1,lyend,z);
+        SimpleGPS.face(SimpleGPS.Orientation.backward);
+        digcolumn(siz[3]-1,zdirection,false);
+        zdirection = (not zdirection);
+        lyend=lyend-5;
+    end
+    
+    -- bottom side
+    while(bx1<=bxend) do
+        SimpleGPS.digto(bx1,1,z);
+        SimpleGPS.face(SimpleGPS.Orientation.right);
+        if (bx1==siz[1]-1) then -- check for meeting dents in corner
+            digcolumn(siz[3]-1,zdirection,true);
+            ry1=ry1+5;
+        else
+            digcolumn(siz[3]-1,zdirection,false);
+        end
+        zdirection = (not zdirection);
+        bx1=bx1+5;
+    end
+    
+    -- right side
+    while(ry1<=ryend) do
+        SimpleGPS.digto(siz[1],ry1,z);
+        SimpleGPS.face(SimpleGPS.Orientation.forward);
+        digcolumn(siz[3]-1,zdirection,ry1==siz[2]-1);
+        zdirection = (not zdirection);
+        ry1=ry1+5;
+    end
+    
+    mode=4 -- come home
+    SimpleGPS.digto(1,1,1);
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
+    
+    mode=5;
+end
+
+main()
+Logger.stop()

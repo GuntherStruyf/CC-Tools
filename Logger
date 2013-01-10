@@ -1,0 +1,57 @@
+-- enums & constants
+LogLevel = {
+    ["Error"] = 0;
+    ["Warning"] = 1;
+    ["Info"] = 2;
+    ["Debug"] = 3;
+    ["Never"] = 4;
+}
+local LogLevel2String = {"Error","Warning","Info","Debug","Never"};
+
+local logfile;
+local cloglevel = LogLevel.Info;
+local loggingactive = false;
+
+-- init logging
+function start(strlogfile, initloglevel)
+    if (not loggingactive) then
+        strlogfile = strlogfile or "turtle.log"
+        cloglevel = initloglevel or LogLevel.Info;
+        logfile = io.open(strlogfile, "w")
+        loggingactive = true;
+    end
+end
+function stop()
+    if (loggingactive) then
+        logfile:close()
+        loggingactive = false;
+    end
+end
+function setLogLevel(ll)
+    cloglevel=ll;
+end
+function getLogLevel()
+    return LogLevel2String[cloglevel+1];
+end
+
+function logdebug(str)
+    start();
+    if (cloglevel>=LogLevel.Debug) then
+        write("DEBUG: " .. str .. "\n")
+    end
+    logfile:write("DEBUG: " .. str .. "\n");
+end
+function loginfo(str)
+    start();
+    if (cloglevel>=LogLevel.Info) then
+        write("INFO: " .. str .. "\n")
+    end
+    logfile:write("INFO: " .. str .. "\n");
+end
+function logerror(str)
+    start();
+    if (cloglevel>=LogLevel.Error) then
+        write("ERROR: " .. str .. "\n")
+    end
+    logfile:write("ERROR: " .. str .. "\n");
+end
