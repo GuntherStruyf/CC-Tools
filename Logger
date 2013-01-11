@@ -55,3 +55,10 @@ function logerror(str)
     end
     logfile:write("ERROR: " .. str .. "\n");
 end
+function logwarning(str)
+    start();
+    if (cloglevel>=LogLevel.Warning) then
+        write("WARNING: " .. str .. "\n")
+    end
+    logfile:write("WARNING: " .. str .. "\n");
+end

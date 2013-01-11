@@ -13,6 +13,17 @@ function setRefPosition(x0_ref,y0_ref,z0_ref)
     y0 = y0_ref or y0;
     z0 = z0_ref or z0;
 end
+function setRefOrientation(new_orientation)
+    if (new_orientation==nil) then
+        orientation = Orientation.forward;
+    else
+        if (new_orientation>=0 and new_orientation<=3) then
+            orientation = new_orientation;
+        else
+            logerror("Invalid orientation: " .. new_orientation);
+        end
+    end
+end
 function setFuelSlot(fs)
     slot_fuel = fs or slot_fuel;
 end
@@ -28,7 +39,7 @@ local num2ori = {"forward","right","backward","left"};
 local x = x0;
 local y = y0;
 local z = z0;
-local orientation = Orientation.right;
+local orientation = Orientation.forward;
 
 -- output functions
 function getX()
@@ -47,9 +58,15 @@ end
 -- refuel function
 function refuel(amount)
     if turtle.getFuelLevel()<5 then
-        turtle.select(slot_fuel)
-        turtle.refuel(amount)
+        if (turtle.getItemCount(slot_fuel)==0) then
+            Logger.logerror("I'M OUTTA FUEL!!");
+            return false;
+        else
+            turtle.select(slot_fuel)
+            turtle.refuel(amount)
+        end
     end
+    return true;
 end
 
 -- motion + tracking functions
@@ -61,18 +78,34 @@ function digto(xx,yy,zz)
 end
 function digx(dist)
     if (dist>0) then
-        return (face(Orientation.right) and digforward(dist))
+        if (orientation==Orientation.left) then
+            return digbackward(dist);
+        else
+            return (face(Orientation.right) and digforward(dist))
+        end
     elseif (dist<0) then
-        return (face(Orientation.left) and digforward(-dist))
+        if (orientation==Orientation.right) then
+            return digbackward(-dist);
+        else
+            return (face(Orientation.left) and digforward(-dist))
+        end
     else
         return true
     end
 end
 function digy(dist)
     if (dist>0) then
-        return (face(Orientation.forward) and digforward(dist))
+        if (orientation==Orientation.backward) then
+            return digbackward(dist);
+        else
+            return (face(Orientation.forward) and digforward(dist))
+        end
     elseif (dist<0) then
-        return (face(Orientation.backward) and digforward(-dist))
+        if (orientation==Orientation.forward) then
+            return digbackward(-dist);
+        else
+            return (face(Orientation.backward) and digforward(-dist))
+        end
     else
         return true
     end
@@ -129,18 +162,34 @@ function moveto(xx,yy,zz)
 end
 function movex(dist)
     if (dist>0) then
-        return (face(Orientation.right) and moveforward(dist))
+        if (orientation==Orientation.left) then
+            return movebackward(dist);
+        else
+            return (face(Orientation.right) and moveforward(dist))
+        end
     elseif (dist<0) then
-        return (face(Orientation.left) and moveforward(-dist))
+        if (orientation==Orientation.right) then
+            return movebackward(-dist);
+        else
+            return (face(Orientation.left) and moveforward(-dist))
+        end
     else
         return true
     end
 end
 function movey(dist)
     if (dist>0) then
-        return (face(Orientation.forward) and moveforward(dist))
+        if (orientation==Orientation.backward) then
+            return movebackward(dist);
+        else
+            return (face(Orientation.forward) and moveforward(dist))
+        end
     elseif (dist<0) then
-        return (face(Orientation.backward) and moveforward(-dist))
+        if (orientation==Orientation.forward) then
+            return movebackward(-dist);
+        else
+            return (face(Orientation.backward) and moveforward(-dist))
+        end
     else
         return true
     end
@@ -213,6 +262,20 @@ function digforward(dist)
     end
     return true
 end
+function digbackward(dist)
+    -- just move backward until obstruction, then turn around and digforward
+    -- this turn might not be needed, hence this function
+    for ii=1,dist do
+        refuel(1)
+        if (not turtle.back()) then
+            Logger.logdebug("Switching from backward digging to forward");
+            return (turnleft(2) and digforward(dist-ii+1));
+        else
+            adddist(-1)
+        end
+    end
+    return true
+end
 function moveforward(dist)
     local num_attempts = 0
     for ii=1,dist do
@@ -230,15 +293,32 @@ function moveforward(dist)
     end
     return true
 end
+function movebackward(dist)
+    local num_attempts = 0
+    for ii=1,dist do
+        num_attempts = 0
+        refuel(1)
+        while not turtle.back() do
+            num_attempts = num_attempts + 1
+            if (num_attempts>20) then
+                Logger.logerror("I'm stuck while moving forward")
+                return false
+            end
+            sleep(block_fall_time)
+        end
+        adddist(-1)
+    end
+    return true
+end
 function adddist(dist)
     if (orientation==Orientation.forward) then
-        y = y + 1
+        y = y + dist
     elseif (orientation==Orientation.right) then
-        x = x + 1
+        x = x + dist
     elseif (orientation==Orientation.backward) then
-        y = y - 1
+        y = y - dist
     elseif (orientation==Orientation.left) then
-        x = x - 1
+        x = x - dist
     else
         Logger.logwarning("Orientation = " .. orientation .. " ; This orientation is impossible :/")
     end 

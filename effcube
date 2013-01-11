@@ -1,7 +1,7 @@
 os.loadAPI("Logger");
 os.loadAPI("SimpleGPS");
 SimpleGPS.setFuelSlot(16);
-Logger.start("effcube2.log",Logger.LogLevel.Info);
+Logger.start("effcube.log",Logger.LogLevel.Info);
 
 -- Variables
 sleep(2)

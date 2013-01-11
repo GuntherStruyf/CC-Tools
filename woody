@@ -1,0 +1,195 @@
+os.loadAPI("Logger");
+os.loadAPI("SimpleGPS");
+SimpleGPS.setFuelSlot(16);
+SimpleGPS.setRefPosition(0,0,0);
+Logger.start("woody.log",Logger.LogLevel.Info);
+
+-- CONSTANTS
+--slots
+slot_suck       = 10;
+slot_overflow   = 11;
+slot_logs1 		= 12;
+slot_logs2 		= 13;
+slot_saplings	= 14;
+slot_bonemeal	= 15
+slot_fuel		= 16;
+-- init gps
+SimpleGPS.setRefOrientation(SimpleGPS.Orientation.forward);
+SimpleGPS.setFuelSlot(slot_fuel);
+--supply chests positions wrt base station
+basestation = {0,0,0};
+saplingschest = {1,0,0};
+bonemealchest = {0,-1,0};
+fuelchest = {-1,0,0};
+
+function waitforuserinput()
+    sInput = nil;
+    print("Press ENTER to continue..");
+    while true do
+        sInput = read();
+        if (sInput ~= nil or sInput ~= "") then
+            break;
+        end
+    end
+end
+function yesnodialog(msg)
+    while (true) do
+        if (msg~=nil) then
+            print(msg);
+        end
+        print("Press Y(es) or N(o) to continue.");
+        local event, param1 = os.pullEvent ("char") -- limit os.pullEvent to the char event
+        if (param1=="Y" or param1=="y") then
+            return true;
+        elseif (param1=="N" or param1=="n") then
+            return false;
+        else
+            print("Your input: " .. param1);
+            print("Incorrect input. Press Y or N!");
+            sleep(1.5);
+        end
+    end
+end
+function digupuntilsky()
+    while(turtle.detectUp()) do
+        SimpleGPS.digz(1);
+    end
+end
+function placesapling()
+    if (turtle.getItemCount(slot_saplings)==0) then
+        Logger.logerror("out of saplings");
+        return false;
+    else
+        turtle.select(slot_saplings);
+        turtle.place();
+    end
+    return isslot(slot_saplings);
+end
+function iswood()
+    -- some logs look alike, but aren't, use the rightbottom corner to compare
+    return isslot(slot_logs1) or isslot(slot_logs2);
+end
+function isslot(slotnum)
+    turtle.select(slotnum);
+    return turtle.compare();
+end
+function placebonemeal()
+    if (not iswood()) then
+        if (turtle.getItemCount(slot_bonemeal)==0) then
+            Logger.logerror("out of bonemeal");
+            return false;
+        else
+            if (isslot(slot_saplings)) then
+                turtle.select(slot_bonemeal);
+                turtle.place();
+            else
+                return false;
+            end
+        end
+    end
+    if (not iswood()) then
+        Logger.logwarning("Tree won't grown!! :(");
+        return false;
+    else
+        return true;
+    end
+end
+function movetovec(vec)
+    SimpleGPS.moveto(vec[1],vec[2],vec[3]);
+end
+function sucksome(slot, quantity)
+    -- assuming the supply contains > quantity
+    turtle.select(slot_suck);
+    turtle.suckDown();
+    turtle.transferTo(slot,quantity);
+    turtle.dropDown();
+    turtle.select(slot_overflow);
+    turtle.dropDown();
+end
+function place4saplings()
+    SimpleGPS.moveto(-1,10,0);
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
+    placesapling();
+    SimpleGPS.face(SimpleGPS.Orientation.left);
+    SimpleGPS.movex(1);
+    SimpleGPS.face(SimpleGPS.Orientation.left);
+    placesapling();
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
+    placesapling();
+    SimpleGPS.movey(-1);
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
+    return placesapling();
+end
+function main()
+    SimpleGPS.movey(9);
+    -- regrow if necessary
+    
+    if (not (isslot(slot_saplings) or iswood())) then
+        -- replant first
+        Logger.logdebug("no saplings detected, replant first");
+        place4saplings();
+    end
+    if (placebonemeal()) then
+        Logger.logdebug("digging");
+        -- first corner
+        SimpleGPS.digy(1);
+        digupuntilsky();
+        -- 2nd corner
+        SimpleGPS.digy(1);
+        digupuntilsky();
+        SimpleGPS.digz(-SimpleGPS.getZ());
+        -- 3rd corner
+        SimpleGPS.digx(-1);
+        digupuntilsky();
+        --4th corner
+        SimpleGPS.digy(-1);
+        digupuntilsky();
+        SimpleGPS.digz(-SimpleGPS.getZ());
+        
+        -- replant
+        Logger.logdebug("replant");
+        place4saplings();
+        
+        -- drop loot at drop point
+        SimpleGPS.moveto(0,5,0);
+        Logger.logdebug("dropping loot");
+        for ii=1,10 do
+            turtle.select(ii);
+            turtle.drop();
+        end
+    end
+    Logger.logdebug("resupply");
+    movetovec(bonemealchest);
+    Logger.logdebug("sucking some bonemeal");
+    movetovec(saplingschest);
+    Logger.logdebug("sucking some saplings");
+    sucksome(slot_saplings,64);
+    movetovec(fuelchest);
+    Logger.logdebug("sucking some fuel");
+    sucksome(slot_fuel,64);
+    sucksome(slot_bonemeal,64);
+    movetovec(basestation);
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
+end
+
+term.clear()
+term.setCursorPos(1, 1)
+print("Make sure the slots contain the right stuff:");
+print("slot " .. slot_suck .. ": nothing");
+print("slot " .. slot_overflow .. ": nothing");
+print("slot " .. slot_logs1 .. ": logs type 1");
+print("slot " .. slot_logs2 .. ": logs type 2");
+print("slot " .. slot_saplings .. ": saplings");
+print("slot " .. slot_bonemeal .. ": bonemeal");
+print("slot " .. slot_fuel .. ": fuel");
+print("");
+
+if (yesnodialog("Do you want to start?")) then
+    print("Starting, please stand back!");
+    for jj=1,5 do
+        main()
+        sleep(30);
+    end
+end
+
+Logger.stop();
