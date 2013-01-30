@@ -1,0 +1,14 @@
+local args={...}
+local slot = tonumber(args[1]) or 1;
+if slot and slot>=1 and slot<=16 then
+    turtle.select(slot);
+end
+
+while true do
+    if not turtle.place() then
+        break;
+    end
+    if not turtle.dig() then
+        break;
+    end
+end

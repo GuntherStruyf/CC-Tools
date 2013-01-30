@@ -1,0 +1,179 @@
+os.loadAPI("Logger");
+os.loadAPI("SimpleGPS");
+SimpleGPS.setFuelSlot(0);
+SimpleGPS.setRefPosition(0,0,0);
+Logger.start("stripper.log",Logger.LogLevel.Info);
+
+-- CONSTANTS
+--slots
+slot_chest       = 12;
+slot_compare1    = 13;
+slot_compare2    = 14;
+slot_compare3    = 15
+slot_compare4    = 16;
+-- init gps
+SimpleGPS.setRefOrientation(SimpleGPS.Orientation.forward);
+
+function waitforuserinput()
+    sInput = nil;
+    print("Press ENTER to continue..");
+    while true do
+        sInput = read();
+        if (sInput ~= nil or sInput ~= "") then
+            break;
+        end
+    end
+end
+function yesnodialog(msg)
+    while (true) do
+        if (msg~=nil) then
+            print(msg);
+        end
+        print("Press Y(es) or N(o) to continue.");
+        local event, param1 = os.pullEvent ("char") -- limit os.pullEvent to the char event
+        if (param1=="Y" or param1=="y") then
+            return true;
+        elseif (param1=="N" or param1=="n") then
+            return false;
+        else
+            print("Your input: " .. param1);
+            print("Incorrect input. Press Y or N!");
+            sleep(1.5);
+        end
+    end
+end
+
+
+function isok2mine()
+    return isslot(slot_compare1) or isslot(slot_compare2) or isslot(slot_compare3) or isslot(slot_compare4);
+end
+function isslot(slotnum)
+    turtle.select(slotnum);
+    return turtle.compare();
+end
+function getDirection(src,dest)
+    return (dest>src);
+end
+function reachedDestination(astart,acur,adest)
+    return ((acur==adest) or getDirection(astart,adest)~=getDirection(acur,adest));
+end
+function gotoy(destY)
+    -- goto y=dest, x=xstart, z=zcurrent
+    -- only mine the blocks in the comparison slots
+    -- avoid other blocks by wrapping around them (go left, follow the block countour)
+    local startY = SimpleGPS.getY();
+    while (not reachedDestination(startY,SimpleGPS.getY(),destY)) do
+        if (not cautiousdigy(getDirection(startY,destY))) then
+            goaroundy(destY);
+        end
+    end
+end
+function gotox(destX)
+    -- goto x=dest, y=ystart,z=zcurrent
+    -- only mine the blocks in the comparison slots
+    -- avoid other blocks by wrapping around them (go left, follow the block countour)
+    local startX = SimpleGPS.getX();
+    while (not reachedDestination(startX,SimpleGPS.getX(),destX)) do
+        if (not cautiousdigx(getDirection(startX,destX))) then
+            goaroundy(destX);
+        end
+    end
+end
+function bool2str(b)
+    if b then
+        return 'true';
+    else
+        return 'false';
+    end
+end
+function xor(a,b)
+    return a~=b;
+end
+function goaroundy(desty)
+    local startX = SimpleGPS.getX();
+    local startY = SimpleGPS.getY();
+    
+    while true do
+        if (cautiousdigforward()) then
+            if ((SimpleGPS.getX()==startX) and (getDirection(startY,desty)==getDirection(startY,SimpleGPS.getY()))) then
+                SimpleGPS.turnleft(1);
+                break
+            end
+            SimpleGPS.turnright(1);
+        else
+            SimpleGPS.turnleft(1);
+        end
+    end
+end
+function goaroundx(destx)
+    local startX = SimpleGPS.getX();
+    local startY = SimpleGPS.getY();
+    
+    while true do
+        if (cautiousdigforward()) then
+            if ((SimpleGPS.getY()==startY) and (getDirection(startX,destx)==getDirection(startX,SimpleGPS.getX()))) then
+                SimpleGPS.turnleft(1);
+                break
+            end
+            SimpleGPS.turnright(1);
+        else
+            SimpleGPS.turnleft(1);
+        end
+    end
+end
+function cautiousdigx(trueifplus)
+    if trueifplus then
+        SimpleGPS.face(SimpleGPS.Orientation.right);
+    else
+        SimpleGPS.face(SimpleGPS.Orientation.left);
+    end
+    return cautiousdigforward();
+end
+function cautiousdigy(trueifplus)
+    if trueifplus then
+        SimpleGPS.face(SimpleGPS.Orientation.forward);
+    else
+        SimpleGPS.face(SimpleGPS.Orientation.backward);
+    end
+    return cautiousdigforward();
+end
+function cautiousdigforward()
+    if (turtle.detect()) then
+        if (isok2mine()) then
+            return SimpleGPS.digforward(1);
+        else
+            return false;
+        end
+    else
+        return SimpleGPS.moveforward(1);
+    end
+end
+
+function main()
+    local startX = SimpleGPS.getX();
+    local startY = SimpleGPS.getY();
+    local N = 15;
+    for zz=1,4 do
+        for ii=1,N/2 do
+            gotoy(startY+N);
+            gotox(startX+2*ii-1);
+            gotoy(startY);
+            gotox(startX+2*ii);
+        end
+        gotox(startX);
+        gotoy(startY);
+        SimpleGPS.digz(1);
+    end
+end
+
+term.clear()
+term.setCursorPos(1, 1)
+print("Make sure the four bottom slots contain the allowed blocks to mine!");
+print("");
+
+if (yesnodialog("Do you want to start?")) then
+    print("Starting, please stand back!");
+    main();
+end
+
+Logger.stop();

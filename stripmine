@@ -1,0 +1,55 @@
+-- Variables
+turtle.select(1)
+local tArgs = { ... }
+local N=tonumber(tArgs[1])
+N=N or 1
+print("Gotta drill")
+
+-- Functions
+function refuel(amount)
+    if turtle.getFuelLevel()<5 then
+        turtle.select(16)
+        turtle.refuel(amount)
+        turtle.select(1)
+    end
+end
+
+function turnaround()
+    turtle.turnRight()
+    turtle.turnRight()
+end
+
+function updown()
+    if turtle.detectUp() then
+        turtle.digUp()
+    end
+    if turtle.detectDown() then
+        turtle.digDown()
+    end
+end
+
+-- Main
+for ii=1, N do
+    refuel(1)
+    if turtle.detect() then
+        repeat
+            turtle.dig()
+            sleep(0.25)
+        until turtle.detect() == false
+        turtle.forward()
+        updown()
+    else
+        turtle.forward()
+        updown()
+    end
+    if (ii%10==9) then
+        turtle.placeDown()
+    end
+end
+
+-- come back
+turnaround()
+for ii=1,N do
+    refuel(1)
+    turtle.forward()
+end

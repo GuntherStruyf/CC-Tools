@@ -52,13 +52,19 @@ function getZ()
     return z;
 end
 function getOrientation()
+    return orientation;
+end
+function getOrientationString()
     return num2ori[orientation+1];
 end
 
 -- refuel function
 function refuel(amount)
     if turtle.getFuelLevel()<5 then
-        if (turtle.getItemCount(slot_fuel)==0) then
+        if (slot_fuel==0) then
+            Logger.logerror("I'M OUTTA FUEL!!");
+            return false;
+        elseif (turtle.getItemCount(slot_fuel)==0) then
             Logger.logerror("I'M OUTTA FUEL!!");
             return false;
         else
@@ -230,7 +236,7 @@ end
 -- turning
 function face(desired_orientation)
     local num_turns = (desired_orientation-orientation)%4
-    Logger.logdebug("facing " .. num2ori[desired_orientation+1]);
+    --Logger.logdebug("facing " .. num2ori[desired_orientation+1]);
     
     if (num_turns==0) then
         return true
