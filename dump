@@ -1,0 +1,73 @@
+
+local slot_chest    = 12;
+local slot_compare  = {13,14,15,16}
+local slot_firstreserved = slot_chest;
+
+function placeslot(slotnum, direct)
+    local num_attempts = 0;
+    turtle.select(slotnum);
+    while(true) do
+        if (turtle.place()) then
+            return true;
+        end
+        num_attempts = num_attempts + 1
+        if (num_attempts>20) then
+            print("I'm stuck while placing slot " .. slotnum)
+            return false
+        end
+        sleep(1);
+    end
+end
+function slot2chest(slotnum, direct, keepcount)
+    keepcount = keepcount or 0;
+    local blocks_to_drop;
+    while true do
+        blocks_to_drop = turtle.getItemCount(slotnum)-keepcount;
+        if (blocks_to_drop>=1) then
+            turtle.select(slotnum);
+            -- assume we're already facing the correct direction
+            if (turtle.drop(blocks_to_drop)) then break;end
+            print("Dropoff chest is full, let's wait 10s");
+            sleep(10);
+        else
+            break;
+        end
+    end
+    return true;
+end
+function cleardirect(direct)
+    -- note: sand/gravel/other falling blocks can fall, and _will_ be mined, I don't care if they're in the allowed-to-mine list or not
+    while(turtle.detect()) do
+        turtle.dig();
+        sleep(0.2);
+    end
+end
+function dump2chestAt(chestspot)
+    print('Dumping items into enderchest');
+    cleardirect(chestspot);
+    -- place the chest
+    if (not placeslot(slot_chest,chestspot)) then
+        return false;
+    end
+    -- drop normal slots
+    for ii=1,slot_firstreserved-1 do
+        slot2chest(ii,chestspot,0);
+    end
+    for ii, slotii in ipairs(slot_compare) do
+        slot2chest(slotii,chestspot,1);
+    end
+    -- collect chest
+    turtle.select(slot_chest);
+    turtle.dig();
+    return true;
+end
+function inv2enderchest()
+    -- find empty spot to place the chest
+    local chestspot = 3; -- front
+    if (not dump2chestAt(chestspot)) then
+        print("Can't dump to chest, MISSION ABORT");
+    end
+end
+
+
+inv2enderchest();

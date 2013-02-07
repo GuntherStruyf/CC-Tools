@@ -6,7 +6,7 @@ local y0 = 0;
 local z0 = 0;
 -- obvious name
 local slot_fuel = 16;
-local block_fall_time = 0.2;
+block_fall_time = 0.2;
 
 function setRefPosition(x0_ref,y0_ref,z0_ref)
     x0 = x0_ref or x0;

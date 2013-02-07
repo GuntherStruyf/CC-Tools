@@ -4,13 +4,28 @@ SimpleGPS.setFuelSlot(0);
 SimpleGPS.setRefPosition(0,0,0);
 Logger.start("stripper.log",Logger.LogLevel.Info);
 
+local tArgs = {...}
+local sizx = tonumber(tArgs[1]);
+local sizy = tonumber(tArgs[2]);
+local depth = tonumber(tArgs[3]);
+depth = depth or -3;
+sizx = sizx or 15;
+sizy = sizy or 15;
+local digup = depth>0;
+
 -- CONSTANTS
 --slots
-slot_chest       = 12;
-slot_compare1    = 13;
-slot_compare2    = 14;
-slot_compare3    = 15
-slot_compare4    = 16;
+local slot_chest    = 12;
+local slot_compare  = {13,14,15,16}
+local slot_firstreserved = slot_chest;
+local faces = {
+    ["down"]    = 1;
+    ["up"]      = 2;
+    ["forward"] = 3;
+    ["right"]   = 4;
+    ["backward"]= 5;
+    ["left"]    = 6;
+}
 -- init gps
 SimpleGPS.setRefOrientation(SimpleGPS.Orientation.forward);
 
@@ -44,13 +59,25 @@ function yesnodialog(msg)
 end
 
 
-function isok2mine()
-    return isslot(slot_compare1) or isslot(slot_compare2) or isslot(slot_compare3) or isslot(slot_compare4);
+function isok2mine(direct) --  1: down, // 2: up // other: forward
+    for ii, slotii in ipairs(slot_compare) do
+        if (isslot(slotii,direct)) then
+            return true
+        end
+    end
+    return false;
 end
-function isslot(slotnum)
+function isslot(slotnum, direct)--  1: down, // 2: up // other: forward
     turtle.select(slotnum);
-    return turtle.compare();
+     if (direct==1) then
+        return turtle.compareUp();
+    elseif (direct==2) then
+        return turtle.compareDown();
+    else
+        return turtle.compare();
+    end
 end
+
 function getDirection(src,dest)
     return (dest>src);
 end
@@ -148,22 +175,234 @@ function cautiousdigforward()
         return SimpleGPS.moveforward(1);
     end
 end
-
+function getItemIdx(slotnum)
+    turtle.select(slotnum);
+    for ii, slotii in ipairs(slot_compare) do
+        if (turtle.compareTo(slotii)) then
+            return ii;
+        end
+    end
+    return nil;
+end
+function all(arr)
+    for ii, arrii in ipairs(arr) do
+        if ((arrii==false) or (arrii==nil)) then
+            return false;
+        end
+    end
+    return true;
+end
+function any(arr)
+    for ii, arrii in ipairs(arr) do
+        if (arrii==true) then
+            return true;
+        end
+    end
+    return false;
+end
+function createFalse(L)
+    a={};
+    for ii=1,L do
+        a[ii]=false;
+    end
+    return a;
+end
+function isFullInventory()
+    -- if there is an empty slot, it is not full
+    local isemptyslot = false;
+    for ii=1,slot_firstreserved-1 do
+        if (turtle.getItemCount(ii)==0) then
+            isemptyslot=true
+            break;
+        end
+    end
+    if (isemptyslot) then
+        return false;
+    else
+        local spaceleft=createFalse(table.getn(slot_compare));
+        local item_idx;
+        for ii=1,16 do
+            if (turtle.getItemSpace(ii)>=1) then
+                item_idx=getItemIdx(ii);
+                if (item_idx~=nil) then
+                    spaceleft[item_idx]=true;
+                end
+            end
+        end
+        return not all(spaceleft);
+    end
+end
+function slot2chest(slotnum, direct, keepcount)
+    keepcount = keepcount or 0;
+    local blocks_to_drop;
+    while true do
+        blocks_to_drop = turtle.getItemCount(slotnum)-keepcount;
+        if (blocks_to_drop>=1) then
+            turtle.select(slotnum);
+            if (direct==faces.up) then
+                if (turtle.dropUp(blocks_to_drop)) then break;end
+            elseif (direct==faces.down) then
+                if (turtle.dropDown(blocks_to_drop)) then break;end
+            else
+                -- assume we're already facing the correct direction
+                if (turtle.drop(blocks_to_drop)) then break;end
+            end
+            Logger.logdebug("Dropoff chest is full, let's wait 10s");
+            sleep(10);
+        else
+            break;
+        end
+    end
+    return true;
+end
+function cleardirect(direct)
+    -- note: sand/gravel/other falling blocks can fall, and _will_ be mined, I don't care if they're in the allowed-to-mine list or not
+    if (direct==faces.up) then
+        while(turtle.detectUp()) do
+            turtle.digUp();
+            sleep(SimpleGPS.block_fall_time);
+        end
+    elseif (direct==faces.down) then
+        turtle.digDown();
+    else
+        SimpleGPS.face(direct-3);
+        while(turtle.detect()) do
+            turtle.dig();
+            sleep(SimpleGPS.block_fall_time);
+        end
+    end
+end
+function placeslot(slotnum, direct)
+    local num_attempts = 0;
+    turtle.select(slotnum);
+    while(true) do
+        if (direct==faces.down) then
+            if (turtle.placeDown()) then
+                return true;
+            end
+        elseif (direct==faces.up) then
+            if (turtle.placeUp()) then
+                return true;
+            end
+        else
+            SimpleGPS.face(direct-3);
+            if (turtle.place()) then
+                return true;
+            end
+        end
+        num_attempts = num_attempts + 1
+        if (num_attempts>20) then
+            Logger.logerror("I'm stuck while placing slot " .. slotnum)
+            return false
+        end
+    end
+end
+function dump2chestAt(chestspot)
+    Logger.loginfo('Dumping items into enderchest');
+    cleardirect(chestspot);
+    -- place the chest
+    if (not placeslot(slot_chest,chestspot)) then
+        return false;
+    end
+    
+    -- drop normal slots
+    for ii=1,slot_firstreserved-1 do
+        slot2chest(ii,chestspot,0);
+    end
+    for ii, slotii in ipairs(slot_compare) do
+        slot2chest(slotii,chestspot,1);
+    end
+    
+    -- collect chest
+    turtle.select(slot_chest);
+    if (chestspot==faces.down) then
+        turtle.digDown();
+    elseif (chestspot==faces.up) then
+        turtle.digUp();
+    else
+        SimpleGPS.face(chestspot-3);
+        turtle.dig();
+    end
+    return true;
+end
+function inv2enderchest()
+    -- find empty spot to place the chest
+    local chestspot; --  1 --> 6: down, up, forward, left, back, right
+    if (not turtle.detectUp()) then
+        chestspot = faces.up;
+    elseif (isok2mine(faces.up)) then
+        chestspot = faces.up;
+    elseif (not turtle.detectDown()) then
+        chestspot = faces.down;
+    elseif (isok2mine(faces.down)) then
+        chestspot = faces.down;
+    else
+        for ii=1,4 do
+            if (not turtle.detect()) then
+                chestspot = SimpleGPS.getOrientation()+3;
+                break;
+            elseif (isok2mine(faces.forward)) then
+                chestspot = SimpleGPS.getOrientation()+3;
+                break;
+            end
+            SimpleGPS.turnleft();
+        end
+    end
+    if (chestspot==nil) then
+        Logger.logerror("Can't place enderchest");
+        return false;
+    end
+    Logger.logdebug("chestspot is " .. chestspot);
+    return dump2chestAt(chestspot);
+end
+function checkFullInventory()
+    if (isFullInventory()) then
+        if (not inv2enderchest()) then
+            Logger.logerror("Inventory is full, cannot dump, MISSION ABORTED");
+            return false
+        end
+    else
+        Logger.logdebug("Inventory is not full");
+    end
+    return true
+end
+function gohome(startX, startY)
+    gotox(startX);
+    gotoy(startY);
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
+end
 function main()
     local startX = SimpleGPS.getX();
     local startY = SimpleGPS.getY();
-    local N = 15;
-    for zz=1,4 do
-        for ii=1,N/2 do
-            gotoy(startY+N);
-            gotox(startX+2*ii-1);
-            gotoy(startY);
-            gotox(startX+2*ii);
+    local xx;
+    for zz=1,math.abs(depth) do
+        xx = 1;
+        while(xx<=sizx) do
+            gotox(startX+xx-1);
+            if (not checkFullInventory()) then
+                gohome(startX, startY);
+                return;
+            end
+            gotoy(startY+sizy-1);
+            xx=xx+1;
+            if (xx<=sizx) then
+                gotox(startX+xx-1);
+                if (not checkFullInventory()) then
+                    gohome(startX, startY);
+                    return;
+                end
+                gotoy(startY);
+                xx=xx+1;
+            end
         end
-        gotox(startX);
-        gotoy(startY);
-        SimpleGPS.digz(1);
+        gohome(startX, startY);
+        if (digup) then
+            SimpleGPS.digz(1);
+        else
+            SimpleGPS.digz(-1);
+        end
     end
+    SimpleGPS.face(SimpleGPS.Orientation.forward);
 end
 
 term.clear()
